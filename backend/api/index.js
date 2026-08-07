@@ -12,14 +12,29 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Database Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ecc_db', {
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-  connectTimeoutMS: 10000,
-})
-  .then(() => console.log('MongoDB Connected Successfully'))
-  .catch((err) => console.error('MongoDB Connection Error:', err));
+// Database Connection with caching for serverless
+let cachedDb = null;
+
+async function connectToDatabase() {
+  if (cachedDb) {
+    return cachedDb;
+  }
+
+  const opts = {
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000,
+    maxPoolSize: 10,
+    minPoolSize: 2,
+  };
+
+  cachedDb = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', opts);
+  console.log('MongoDB Connected Successfully');
+  return cachedDb;
+}
+
+// Connect to database
+connectToDatabase().catch((err) => console.error('MongoDB Connection Error:', err));
 
 // Routes
 app.use('/api/auth', require('../routes/auth'));
