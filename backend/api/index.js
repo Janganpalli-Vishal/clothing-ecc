@@ -21,9 +21,9 @@ async function connectToDatabase() {
   }
 
   const opts = {
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 20000,
     socketTimeoutMS: 45000,
-    connectTimeoutMS: 10000,
+    connectTimeoutMS: 20000,
     maxPoolSize: 10,
     minPoolSize: 2,
   };
@@ -33,8 +33,17 @@ async function connectToDatabase() {
   return cachedDb;
 }
 
-// Connect to database
+// Connect to database on startup and per-request middleware
 connectToDatabase().catch((err) => console.error('MongoDB Connection Error:', err));
+
+app.use(async (req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Routes
 app.use('/api/auth', require('../routes/auth'));
