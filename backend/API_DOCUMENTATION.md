@@ -723,19 +723,173 @@ Authorization: Bearer <token>
 
 ---
 
-## Order APIs
+## Order & Checkout APIs
 
-### 17. Create Order (Checkout)
-**Endpoint:** `POST /orders`
+### 17. Get Checkout Summary / Preview
+**Endpoint:** `POST /orders/summary`
 
-**Description:** Create a new order from cart items
+**Description:** Preview items, price calculations, shipping, tax, stock availability, and shipping address without creating an order.
 
 **Headers:**
 ```
 Authorization: Bearer <token>
 ```
 
-**Payload:**
+**Payload (Cart Preview - default):**
+```json
+{
+  "addressId": "65a1b2c3d4e5f6789abc0df4"
+}
+```
+
+**Payload (Custom Items Preview):**
+```json
+{
+  "items": [
+    {
+      "productId": "65a1b2c3d4e5f6789abc0df0",
+      "quantity": 2,
+      "size": "M",
+      "color": "Black"
+    }
+  ],
+  "addressId": "65a1b2c3d4e5f6789abc0df4"
+}
+```
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "product": "65a1b2c3d4e5f6789abc0df0",
+        "name": "Men's Cotton T-Shirt",
+        "image": "https://example.com/image1.jpg",
+        "quantity": 2,
+        "size": "M",
+        "color": "Black",
+        "price": 199,
+        "totalPrice": 398,
+        "inStock": true
+      }
+    ],
+    "itemsPrice": 398,
+    "shippingPrice": 50,
+    "taxPrice": 71.64,
+    "totalPrice": 519.64,
+    "isAvailable": true,
+    "unavailableItems": [],
+    "shippingAddress": {
+      "fullName": "John Doe",
+      "phone": "+1234567890",
+      "addressLine1": "123 Main Street",
+      "city": "New York",
+      "state": "NY",
+      "postalCode": "10001",
+      "country": "USA"
+    }
+  }
+}
+```
+
+---
+
+### 18. Direct "Buy Now" Checkout
+**Endpoint:** `POST /orders/direct`
+
+**Description:** Create an instant order directly for a single item (bypassing user's cart)
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Payload (Using Saved Address ID):**
+```json
+{
+  "productId": "65a1b2c3d4e5f6789abc0df0",
+  "quantity": 1,
+  "size": "M",
+  "color": "Black",
+  "paymentMethod": "COD",
+  "addressId": "65a1b2c3d4e5f6789abc0df4"
+}
+```
+
+**Payload (Using Custom Shipping Address):**
+```json
+{
+  "productId": "65a1b2c3d4e5f6789abc0df0",
+  "quantity": 1,
+  "size": "M",
+  "color": "Black",
+  "paymentMethod": "Card",
+  "shippingAddress": {
+    "fullName": "John Doe",
+    "phone": "+1234567890",
+    "addressLine1": "123 Main Street",
+    "city": "New York",
+    "state": "NY",
+    "postalCode": "10001",
+    "country": "USA"
+  }
+}
+```
+
+**Response (Success - 201):**
+```json
+{
+  "success": true,
+  "message": "Direct order placed successfully",
+  "data": {
+    "order": {
+      "_id": "65a1b2c3d4e5f6789abc0df5",
+      "user": "65a1b2c3d4e5f6789abc0def",
+      "orderItems": [
+        {
+          "product": "65a1b2c3d4e5f6789abc0df0",
+          "name": "Men's Cotton T-Shirt",
+          "quantity": 1,
+          "image": "https://example.com/image1.jpg",
+          "price": 199,
+          "size": "M",
+          "color": "Black"
+        }
+      ],
+      "paymentMethod": "COD",
+      "itemsPrice": 199,
+      "shippingPrice": 50,
+      "taxPrice": 35.82,
+      "totalPrice": 284.82,
+      "orderStatus": "Processing"
+    }
+  }
+}
+```
+
+---
+
+### 19. Create Order (Cart Checkout)
+**Endpoint:** `POST /orders`
+
+**Description:** Create a new order from cart items (supports `addressId` or inline `shippingAddress`)
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Payload (Option A - Using Saved Address):**
+```json
+{
+  "addressId": "65a1b2c3d4e5f6789abc0df4",
+  "paymentMethod": "COD"
+}
+```
+
+**Payload (Option B - Using Shipping Address Object):**
 ```json
 {
   "shippingAddress": {
@@ -780,7 +934,6 @@ Authorization: Bearer <token>
         "fullName": "John Doe",
         "phone": "+1234567890",
         "addressLine1": "123 Main Street",
-        "addressLine2": "Apt 4B",
         "city": "New York",
         "state": "NY",
         "postalCode": "10001",
@@ -789,9 +942,9 @@ Authorization: Bearer <token>
       "paymentMethod": "COD",
       "paymentStatus": "Pending",
       "itemsPrice": 398,
-      "shippingPrice": 0,
+      "shippingPrice": 50,
       "taxPrice": 71.64,
-      "totalPrice": 469.64,
+      "totalPrice": 519.64,
       "isPaid": false,
       "isDelivered": false,
       "orderStatus": "Processing",
@@ -809,17 +962,80 @@ Authorization: Bearer <token>
 }
 ```
 
-**Error Response (400):**
+---
+
+### 20. Process User Payment
+**Endpoint:** `PUT /orders/:id/pay`
+
+**Description:** Complete payment for a pending order by user
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Payload (Optional):**
 ```json
 {
-  "success": false,
-  "message": "Cart is empty"
+  "paymentMethod": "Card",
+  "transactionId": "TXN987654321"
+}
+```
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "message": "Payment completed successfully",
+  "data": {
+    "order": {
+      "_id": "65a1b2c3d4e5f6789abc0df3",
+      "isPaid": true,
+      "paidAt": "2024-01-15T10:35:00.000Z",
+      "paymentStatus": "Completed",
+      "orderStatus": "Processing"
+    }
+  }
 }
 ```
 
 ---
 
-### 18. Get User Orders
+### 21. Cancel Order (User)
+**Endpoint:** `PUT /orders/:id/cancel`
+
+**Description:** Cancel an order placed by the user (only valid if order status is Processing or Confirmed). Restores stock.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Payload (Optional):**
+```json
+{
+  "reason": "Changed my mind"
+}
+```
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "message": "Order cancelled successfully",
+  "data": {
+    "order": {
+      "_id": "65a1b2c3d4e5f6789abc0df3",
+      "orderStatus": "Cancelled",
+      "paymentStatus": "Refunded"
+    }
+  }
+}
+```
+
+---
+
+### 22. Get User Orders
 **Endpoint:** `GET /orders`
 
 **Description:** Get all orders for the logged-in user
@@ -845,8 +1061,8 @@ Authorization: Bearer <token>
     "orders": [
       {
         "_id": "65a1b2c3d4e5f6789abc0df3",
-        "orderItems": [/* order items */],
-        "totalPrice": 469.64,
+        "orderItems": [],
+        "totalPrice": 519.64,
         "orderStatus": "Processing",
         "createdAt": "2024-01-15T10:30:00.000Z"
       }
@@ -857,7 +1073,7 @@ Authorization: Bearer <token>
 
 ---
 
-### 19. Get Single Order Details
+### 23. Get Single Order Details
 **Endpoint:** `GET /orders/:id`
 
 **Description:** Get detailed information about a specific order
@@ -877,17 +1093,9 @@ Authorization: Bearer <token>
 }
 ```
 
-**Error Response (404):**
-```json
-{
-  "success": false,
-  "message": "Order not found"
-}
-```
-
 ---
 
-### 20. Update Order Status (Admin Only)
+### 24. Update Order Status (Admin Only)
 **Endpoint:** `PUT /orders/:id/status`
 
 **Description:** Update order status (Admin only)
@@ -907,20 +1115,9 @@ Authorization: Bearer <admin_token>
 
 **Status Options:** Processing, Confirmed, Shipped, Out for Delivery, Delivered, Cancelled, Returned
 
-**Response (Success - 200):**
-```json
-{
-  "success": true,
-  "message": "Order status updated successfully",
-  "data": {
-    "order": { /* updated order object */ }
-  }
-}
-```
-
 ---
 
-### 21. Update Payment Status (Admin Only)
+### 25. Update Payment Status (Admin Only)
 **Endpoint:** `PUT /orders/:id/payment`
 
 **Description:** Update payment status (Admin only)
@@ -937,22 +1134,9 @@ Authorization: Bearer <admin_token>
 }
 ```
 
-**Payment Status Options:** Pending, Completed, Failed, Refunded
-
-**Response (Success - 200):**
-```json
-{
-  "success": true,
-  "message": "Payment status updated successfully",
-  "data": {
-    "order": { /* updated order object */ }
-  }
-}
-```
-
 ---
 
-### 22. Get All Orders (Admin Only)
+### 26. Get All Orders (Admin Only)
 **Endpoint:** `GET /orders/admin/all`
 
 **Description:** Get all orders in the system (Admin only)
