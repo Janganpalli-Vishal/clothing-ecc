@@ -12,36 +12,52 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Database Connection with caching for serverless
-let cachedDb = null;
+// Database Connection with proper connection-state checking for Serverless (Vercel)
+let connPromise = null;
 
 async function connectToDatabase() {
-  if (cachedDb) {
-    return cachedDb;
+  // If already connected (readyState 1 = connected), return existing connection
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
   }
 
+  // If connection is in progress (readyState 2 = connecting), wait for pending promise
+  if (mongoose.connection.readyState === 2 && connPromise) {
+    await connPromise;
+    return mongoose.connection;
+  }
+
+  const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://vishalvicky181_db_user:ME8NgxsZXsOHrivy@cluster0.twbyebh.mongodb.net/test?appName=Cluster0';
+
   const opts = {
-    serverSelectionTimeoutMS: 20000,
+    bufferCommands: false, // Disable buffering so DB connection issues fail fast instead of timing out after 10s
+    serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 45000,
-    connectTimeoutMS: 20000,
-    maxPoolSize: 10,
-    minPoolSize: 2,
+    connectTimeoutMS: 10000,
   };
 
-  cachedDb = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/test', opts);
+  connPromise = mongoose.connect(mongoUri, opts).catch((err) => {
+    connPromise = null;
+    throw err;
+  });
+
+  await connPromise;
   console.log('MongoDB Connected Successfully');
-  return cachedDb;
+  return mongoose.connection;
 }
 
-// Connect to database on startup and per-request middleware
-connectToDatabase().catch((err) => console.error('MongoDB Connection Error:', err));
-
+// Middleware to ensure DB is connected before executing any route handler
 app.use(async (req, res, next) => {
   try {
     await connectToDatabase();
     next();
   } catch (err) {
-    next(err);
+    console.error('MongoDB Connection Error:', err.message);
+    res.status(500).json({
+      success: false,
+      message: 'Database connection error. Please verify MONGODB_URI and MongoDB Atlas IP Access settings (allow 0.0.0.0/0).',
+      error: err.message
+    });
   }
 });
 
